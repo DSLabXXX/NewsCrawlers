@@ -1,4 +1,6 @@
 # -*- coding: UTF-8 -*-
+# The target of this code is to crawl data from Gossiping broad of PTT
+# This code is modify from https://github.com/zake7749/PTT-Chat-Generator
 
 import json
 import requests
