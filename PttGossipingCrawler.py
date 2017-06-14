@@ -249,27 +249,58 @@ class PttCrawler(object):
             print(u'已經完成 %s 頁面第 %d 頁的爬取' % (board, start))
             start += 1
 
-    def auto_crawl(self, board='Gossiping', sleep_time=0.5):
-        home_page = self.root + board + '/index.html'
+    def find_page_date(self, board, date):
+        url = self.root + board + '/index.html'
+
+        while url:
+            res = self.session.get(url, verify=False)
+            soup = BeautifulSoup(res.text, 'lxml')
+
+            divs = soup.find_all('div', 'r-ent')
+            for d in divs:
+                # 發文日期 & date equal
+                if d.find('div', 'date').string.strip() == date:
+                    return url
+
+            # 取得上一頁的連結
+            paging_div = soup.find('div', 'btn-group btn-group-paging')
+            url = self.main + paging_div.find_all('a')[1]['href']
+
+    def auto_crawl(self, board='Gossiping', date_path=None, sleep_time=0.5):
+        """
+        :param board: str, PTT board name like 'Gossiping'
+        :param date_path: str, format= %Y%m%d ex.'20170613' 
+        :param sleep_time: float, every epoch sleep sleep_time sec
+        """
         today_articles = list()
-        today = time.strftime('%m/%d').lstrip('0')
-        today_path = time.strftime('%Y%m%d')
-        file_path = self.file_root + 'Ptt/' + board + '/' + today_path + '/'
+
+        if not date_path:
+            # 不指定就爬今天
+            date = time.strftime('%m/%d').lstrip('0')
+            date_path = time.strftime('%Y%m%d')
+        else:
+            date = date_path[4:]
+            date = (date[:2] + '/' + date[2:]).lstrip('0')
+
+        first_page = self.find_page_date(board, date)
+        print('first_page : %s' % first_page)
+
+        file_path = self.file_root + 'Ptt/' + board + '/' + date_path + '/'
 
         # check folder
         if not os.path.isdir(file_path):
             os.makedirs(file_path)
 
         # check crawled list
-        json_today = file_path + today_path + '.json'
+        json_today = file_path + date_path + '.json'
         if not os.path.isfile(json_today):
             with open(json_today, 'w') as wf:
                 json.dump(today_articles, wf)
 
-        articles, pre_link = self.get_articles(home_page, today, json_today)
+        articles, pre_link = self.get_articles(first_page, date, json_today)
         while articles:
             today_articles += articles
-            articles, pre_link = self.get_articles(pre_link, today, json_today)
+            articles, pre_link = self.get_articles(pre_link, date, json_today)
         print(len(today_articles))
 
         for art_link in today_articles:
@@ -287,10 +318,14 @@ def main():
 
     crawler = PttCrawler()
     # crawler.crawl(board='Gossiping', start=22500, end=22501)
-    crawler.auto_crawl(board='Gossiping')
+    # crawler.auto_crawl(board='Gossiping')
+    crawler.auto_crawl(board='Gossiping', date_path='20170612')
+
     # for test
     # art = crawler.parse_article('https://www.ptt.cc/bbs/Gossiping/M.1497312830.A.755.html')
     # art = crawler.parse_article('https://www.ptt.cc/bbs/Gossiping/M.1497338721.A.E5B.html')
+
+    # print(crawler.find_page_date('Gossiping', '6/13'))
 
 if __name__ == '__main__':
     main()
