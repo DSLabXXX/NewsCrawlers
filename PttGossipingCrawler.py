@@ -134,6 +134,11 @@ class PttCrawler(object):
             print(u'在分析 url 時出現錯誤')
         return img_urls, link_urls
 
+    def title_word_replace(self, text):
+        text = re.sub(r'([0-9])/([0-9])', r'\1_\2', text)
+        text = text.replace('/', ' ')
+        return text
+
     def parse_article(self, url):
         raw = self.session.get(url, verify=False)
         soup = BeautifulSoup(raw.text, 'lxml')
@@ -145,7 +150,7 @@ class PttCrawler(object):
 
             # 取得文章作者與文章標題
             article['Author'] = soup.select('.article-meta-value')[0].contents[0].split(' ')[0]
-            article['Title'] = soup.select('.article-meta-value')[2].contents[0]
+            article['Title'] = self.title_word_replace(soup.select('.article-meta-value')[2].contents[0])
 
             # 取得文章 Date
             article['Date'] = self.parse_date(soup.select('.article-meta-value')[-1].contents[0].split())
@@ -279,8 +284,9 @@ class PttCrawler(object):
             date = time.strftime('%m/%d').lstrip('0')
             date_path = time.strftime('%Y%m%d')
         else:
-            date = date_path[4:]
-            date = (date[:2] + '/' + date[2:]).lstrip('0')
+            # date = date_path[4:]
+            # date = (date[:2] + '/' + date[2:]).lstrip('0')
+            date = time.strftime('%m/%d', time.localtime(time.mktime(time.strptime(date_path, '%Y%m%d')))).lstrip('0')
 
         first_page = self.find_page_date(board, date)
         print('first_page : %s' % first_page)
@@ -319,7 +325,7 @@ def main():
     crawler = PttCrawler()
     # crawler.crawl(board='Gossiping', start=22500, end=22501)
     # crawler.auto_crawl(board='Gossiping')
-    crawler.auto_crawl(board='Gossiping', date_path='20170612')
+    crawler.auto_crawl(board='Gossiping', date_path='20170611')
 
     # for test
     # art = crawler.parse_article('https://www.ptt.cc/bbs/Gossiping/M.1497312830.A.755.html')
