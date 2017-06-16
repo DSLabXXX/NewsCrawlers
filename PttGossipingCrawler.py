@@ -11,6 +11,9 @@ import re
 from bs4 import BeautifulSoup
 from bs4.element import NavigableString
 
+import logging
+import logging.config
+
 
 class PttCrawler(object):
 
@@ -35,6 +38,26 @@ class PttCrawler(object):
         self.session.post('https://www.ptt.cc/ask/over18',
                           verify=False,
                           data=self.gossip_data)
+        self.log = logging.getLogger('PttGossipingCrawler')
+        self.set_log_conf()
+
+    def set_log_conf(self):
+        self.log.setLevel(logging.DEBUG)
+
+        # Log file 看得到 DEBUG
+        file_hdlr = logging.FileHandler('log/' + time.strftime('%Y%m%d%H%M') + '_PttGossiping.log')
+        file_hdlr.setLevel(logging.DEBUG)
+
+        # Command line 看不到 DEBUG
+        console_hdlr = logging.StreamHandler()
+        console_hdlr.setLevel(logging.INFO)
+
+        formatter = logging.Formatter('%(levelname)-8s - %(asctime)s - %(name)-12s - %(message)s')
+        file_hdlr.setFormatter(formatter)
+        console_hdlr.setFormatter(formatter)
+
+        self.log.addHandler(file_hdlr)
+        self.log.addHandler(console_hdlr)
 
     def get_articles(self, page, date, json_file):
         res = self.session.get(page, verify=False)
@@ -92,8 +115,8 @@ class PttCrawler(object):
                 yield self.main + article.select('.title')[0].select('a')[0].get('href')
             except Exception as e:
                 # (本文已被刪除)
-                # logging.exception(e)
-                print(e)
+                logging.exception(e)
+                self.log.exception(e)
 
     def pages(self, board=None, index_range=None):
 
@@ -116,8 +139,8 @@ class PttCrawler(object):
             for i in date_data[3].split(':'):
                 date += i
         except Exception as e:
-            print(e)
-            print(u'在分析 date 時出現錯誤')
+            self.log.exception(e)
+            self.log.error(u'在分析 date 時出現錯誤')
         return date
 
     def parse_url(self, links):
@@ -130,8 +153,8 @@ class PttCrawler(object):
                 else:
                     link_urls.append(link['href'])
         except Exception as e:
-            print(e)
-            print(u'在分析 url 時出現錯誤')
+            self.log.exception(e)
+            self.log.error(u'在分析 url 時出現錯誤')
         return img_urls, link_urls
 
     def title_word_replace(self, text):
@@ -220,8 +243,8 @@ class PttCrawler(object):
             article['Source'] = 'Ptt' + self.board
 
         except Exception as e:
-            print(e)
-            print(u'在分析 %s 時出現錯誤' % url)
+            self.log.exception(e)
+            self.log.error(u'在分析 %s 時出現錯誤' % url)
 
         return article
 
@@ -236,8 +259,8 @@ class PttCrawler(object):
                 # op.write(json.dumps(data, indent=4, ensure_ascii=False).encode('utf-8'))
                 json.dump(data, op, indent=4, ensure_ascii=False)
         except Exception as e:
-            print(e)
-            print(u'在 Check Folder or Save File 時出現錯誤')
+            self.log.exception(e)
+            self.log.error(u'在 Check Folder or Save File 時出現錯誤\nfilename:{0}'.format(filename))
 
     def crawl(self, board='Gossiping', start=1, end=2, sleep_time=0.5):
         self.board = board
@@ -251,10 +274,11 @@ class PttCrawler(object):
                 self.save_article(board, '%s_' % art['Date'] + str(art['Title']) + '_%s' % art['Author'], art)
                 time.sleep(sleep_time)
 
-            print(u'已經完成 %s 頁面第 %d 頁的爬取' % (board, start))
+            self.log.error(u'已經完成 %s 頁面第 %d 頁的爬取' % (board, start))
             start += 1
 
-    def find_page_date(self, board, date):
+    def find_first_page(self, board, date):
+        # Find first page by date
         url = self.root + board + '/index.html'
 
         while url:
@@ -262,8 +286,18 @@ class PttCrawler(object):
             soup = BeautifulSoup(res.text, 'lxml')
 
             divs = soup.find_all('div', 'r-ent')
+            home_apge = 1
             for d in divs:
                 # 發文日期 & date equal
+                # if re.match(r"[^[]*\[([^]]*)\]", d.select('.title')[0].select('a')[0].text).groups()[0] == '公告':
+                if home_apge and d.find('a'):
+                    # 搜尋時跳過置底公告
+                    m = re.search(r'\[(.*?)\]', d.select('.title')[0].select('a')[0].text)
+                    if m:
+                        if m.groups(1)[0] == '公告':
+                            home_apge = 0
+                            break
+
                 if d.find('div', 'date').string.strip() == date:
                     return url
 
@@ -288,8 +322,7 @@ class PttCrawler(object):
             # date = (date[:2] + '/' + date[2:]).lstrip('0')
             date = time.strftime('%m/%d', time.localtime(time.mktime(time.strptime(date_path, '%Y%m%d')))).lstrip('0')
 
-        first_page = self.find_page_date(board, date)
-        print('first_page : %s' % first_page)
+        first_page = self.find_first_page(board, date)
 
         file_path = self.file_root + 'Ptt/' + board + '/' + date_path + '/'
 
@@ -307,14 +340,18 @@ class PttCrawler(object):
         while articles:
             today_articles += articles
             articles, pre_link = self.get_articles(pre_link, date, json_today)
-        print(len(today_articles))
+
+        self.log.info('Crawl by date: %s' % date_path)
+        self.log.info('first_page : %s' % first_page)
+        self.log.info('Data store at : %s' % file_path)
+        self.log.info('Num of target articles : {0}'.format(len(today_articles)))
 
         for art_link in today_articles:
             art = self.parse_article(art_link)
             try:
                 file_name = '%s_' % art['Date'] + str(art['Title']) + '_%s' % art['Author']
             except Exception as e:
-                print(e)
+                self.log.exception(e)
                 file_name = 'UnkownFileName_%d' % time.time()
             self.save_article(board, file_name, art)
             time.sleep(sleep_time)
@@ -324,14 +361,14 @@ def main():
 
     crawler = PttCrawler()
     # crawler.crawl(board='Gossiping', start=22500, end=22501)
-    # crawler.auto_crawl(board='Gossiping')
-    crawler.auto_crawl(board='Gossiping', date_path='20170611')
+    crawler.auto_crawl(board='Gossiping')
+    # crawler.auto_crawl(board='Gossiping', date_path='20170607')
 
     # for test
     # art = crawler.parse_article('https://www.ptt.cc/bbs/Gossiping/M.1497312830.A.755.html')
     # art = crawler.parse_article('https://www.ptt.cc/bbs/Gossiping/M.1497338721.A.E5B.html')
 
-    # print(crawler.find_page_date('Gossiping', '6/13'))
+    # print(crawler.find_first_page('Gossiping', '6/08'))
 
 if __name__ == '__main__':
     main()
