@@ -75,10 +75,10 @@ class PttCrawler(object):
         articles = []  # 儲存取得的文章資料
         divs = soup.find_all('div', 'r-ent')
         for d in divs:
-            # Check 有超連結，表示文章存在，未被刪除 and 發文日期正確
+            # Check 有超連結，表示文章存在、未被刪除。並且發文日期正確
             if d.find('a') and d.find('div', 'date').string.strip() == date:
                 href = self.main + d.find('a')['href']
-                # Check link is not redundant.
+                # Check link is not redundant. 避免重複爬取文章
                 if href not in check_set:
                     # 取得推文數
                     push_count = 0
@@ -115,7 +115,6 @@ class PttCrawler(object):
                 yield self.main + article.select('.title')[0].select('a')[0].get('href')
             except Exception as e:
                 # (本文已被刪除)
-                logging.exception(e)
                 self.log.exception(e)
 
     def pages(self, board=None, index_range=None):
@@ -175,7 +174,7 @@ class PttCrawler(object):
             article['Author'] = soup.select('.article-meta-value')[0].contents[0].split(' ')[0]
             article['Title'] = self.title_word_replace(soup.select('.article-meta-value')[2].contents[0])
 
-            # 取得文章 Date
+            # 取得文章 Date 如 '20170313'
             article['Date'] = self.parse_date(soup.select('.article-meta-value')[-1].contents[0].split())
 
             # 取得內文
@@ -210,6 +209,9 @@ class PttCrawler(object):
 
                     response_dic = dict()
                     response_dic['Content'] = response_struct.select('.push-content')[0].contents[0][2:]
+                    if response_dic['Content'] == '':
+                        if response_struct.find('a'):
+                            response_dic['Content'] = response_struct.select('a')[0].contents[0]
                     response_dic['Vote'] = response_struct.select('.push-tag')[0].contents[0][0]
                     response_dic['User'] = response_struct.select('.push-userid')[0].contents[0]
                     response_dic['Date'] = response_struct.select('.push-ipdatetime')[0].contents[0].split('\n')[0]
@@ -256,7 +258,6 @@ class PttCrawler(object):
                 os.makedirs(file_path)
 
             with open(file_path + filename + '.json', 'w') as op:
-                # op.write(json.dumps(data, indent=4, ensure_ascii=False).encode('utf-8'))
                 json.dump(data, op, indent=4, ensure_ascii=False)
         except Exception as e:
             self.log.exception(e)
@@ -265,9 +266,7 @@ class PttCrawler(object):
     def crawl(self, board='Gossiping', start=1, end=2, sleep_time=0.5):
         self.board = board
         crawl_range = range(start, end)
-        # for Test
-        # art = self.parse_article('https://www.ptt.cc/bbs/Gossiping/M.1487731045.A.EFD.html')
-        # art = self.parse_article('https://www.ptt.cc/bbs/Gossiping/M.1497232034.A.13B.html')
+
         for page in self.pages(board, crawl_range):
             for article in self.articles(page):
                 art = self.parse_article(article)
@@ -278,7 +277,7 @@ class PttCrawler(object):
             start += 1
 
     def find_first_page(self, board, date):
-        # Find first page by date
+        # Find first page by date 根據日期尋找要從那一頁開始往回爬
         url = self.root + board + '/index.html'
 
         while url:
@@ -289,9 +288,8 @@ class PttCrawler(object):
             home_apge = 1
             for d in divs:
                 # 發文日期 & date equal
-                # if re.match(r"[^[]*\[([^]]*)\]", d.select('.title')[0].select('a')[0].text).groups()[0] == '公告':
                 if home_apge and d.find('a'):
-                    # 搜尋時跳過置底公告
+                    # 搜尋時跳過首頁的置底公告
                     m = re.search(r'\[(.*?)\]', d.select('.title')[0].select('a')[0].text)
                     if m:
                         if m.groups(1)[0] == '公告':
@@ -358,16 +356,18 @@ class PttCrawler(object):
 
 
 def main():
+    # 尚有文章失去標頭(header)時的狀況須處理
 
     crawler = PttCrawler()
     # crawler.crawl(board='Gossiping', start=22500, end=22501)
-    crawler.auto_crawl(board='Gossiping')
-    # crawler.auto_crawl(board='Gossiping', date_path='20170607')
+    # crawler.auto_crawl(board='Gossiping')
+    crawler.auto_crawl(board='Gossiping', date_path='20170620')
 
-    # for test
-    # art = crawler.parse_article('https://www.ptt.cc/bbs/Gossiping/M.1497312830.A.755.html')
+    # 針對 parse_article 做測試
+    # art = crawler.parse_article('https://www.ptt.cc/bbs/Gossiping/M.1496420533.A.B5F.html')
     # art = crawler.parse_article('https://www.ptt.cc/bbs/Gossiping/M.1497338721.A.E5B.html')
 
+    # 針對 根據日期搜尋要爬取的第一頁 做測試
     # print(crawler.find_first_page('Gossiping', '6/08'))
 
 if __name__ == '__main__':
