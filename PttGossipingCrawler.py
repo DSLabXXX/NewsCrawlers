@@ -208,10 +208,12 @@ class PttCrawler(object):
                 if 'warning-box' not in response_struct['class']:
 
                     response_dic = dict()
-                    response_dic['Content'] = response_struct.select('.push-content')[0].contents[0][2:]
-                    if response_dic['Content'] == '':
-                        if response_struct.find('a'):
-                            response_dic['Content'] = response_struct.select('a')[0].contents[0]
+                    # 處理推文內容 分為連結或一般內容
+                    if response_struct.find('a'):
+                        response_dic['Content'] = response_struct.select('a')[0].contents[0]
+                    else:
+                        response_dic['Content'] = response_struct.select('.push-content')[0].contents[0][2:]
+
                     response_dic['Vote'] = response_struct.select('.push-tag')[0].contents[0][0]
                     response_dic['User'] = response_struct.select('.push-userid')[0].contents[0]
                     response_dic['Date'] = response_struct.select('.push-ipdatetime')[0].contents[0].split('\n')[0]
@@ -357,18 +359,21 @@ class PttCrawler(object):
 
 def main():
     # 尚有文章失去標頭(header)時的狀況須處理
+    # art = crawler.parse_article('https://www.ptt.cc/bbs/Gossiping/M.1496931521.A.C3E.html')
 
     crawler = PttCrawler()
-    # crawler.crawl(board='Gossiping', start=22500, end=22501)
     # crawler.auto_crawl(board='Gossiping')
-    crawler.auto_crawl(board='Gossiping', date_path='20170620')
+    # crawler.auto_crawl(board='Gossiping', date_path='20170620')
 
     # 針對 parse_article 做測試
-    # art = crawler.parse_article('https://www.ptt.cc/bbs/Gossiping/M.1496420533.A.B5F.html')
-    # art = crawler.parse_article('https://www.ptt.cc/bbs/Gossiping/M.1497338721.A.E5B.html')
+    art = crawler.parse_article('https://www.ptt.cc/bbs/Gossiping/M.1496420533.A.B5F.html')
 
     # 針對 根據日期搜尋要爬取的第一頁 做測試
     # print(crawler.find_first_page('Gossiping', '6/08'))
+
+    # 原作者用法
+    # crawler.crawl(board='Gossiping', start=22500, end=22501)
+
 
 if __name__ == '__main__':
     main()
