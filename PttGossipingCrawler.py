@@ -42,6 +42,7 @@ class PttCrawler(object):
         self.set_log_conf()
 
     def set_log_conf(self):
+        # 設定log
         self.log.setLevel(logging.DEBUG)
 
         # Log file 看得到 DEBUG
@@ -60,6 +61,7 @@ class PttCrawler(object):
         self.log.addHandler(console_hdlr)
 
     def get_articles(self, page, date, json_file):
+        # 從指定頁面找可以爬取的文章
         res = self.session.get(page, verify=False)
         soup = BeautifulSoup(res.text, 'lxml')
 
@@ -106,7 +108,7 @@ class PttCrawler(object):
         return articles, prev_url
 
     def articles(self, page):
-
+        # 原作者的文章回傳方式
         res = self.session.get(page, verify=False)
         soup = BeautifulSoup(res.text, 'lxml')
 
@@ -118,7 +120,7 @@ class PttCrawler(object):
                 self.log.exception(e)
 
     def pages(self, board=None, index_range=None):
-
+        # 原作者的頁面回傳方式
         target_page = self.root + board + '/index'
 
         if index_range is None:
@@ -128,6 +130,7 @@ class PttCrawler(object):
                 yield target_page + str(index) + '.html'
 
     def parse_date(self, date_data):
+        # 處理爬取到的ptt日期格式
         try:
             # process time ex.2017 08 8 -> 2017 08 08
             if len(date_data[2]) == 1:
@@ -143,6 +146,7 @@ class PttCrawler(object):
         return date
 
     def parse_url(self, links):
+        # 處理爬取到的連結網址或圖片
         try:
             img_urls = []
             link_urls = []
@@ -157,11 +161,14 @@ class PttCrawler(object):
         return img_urls, link_urls
 
     def title_word_replace(self, text):
+        # 避免標題出現 '/' 等無法當作檔名的符號
+        # 輸入 text 為字串(str)
         text = re.sub(r'([0-9])/([0-9])', r'\1_\2', text)
         text = text.replace('/', ' ')
         return text
 
     def parse_article(self, url):
+        # 爬取ptt文章內容
         raw = self.session.get(url, verify=False)
         soup = BeautifulSoup(raw.text, 'lxml')
 
@@ -253,6 +260,7 @@ class PttCrawler(object):
         return article
 
     def save_article(self, board, filename, data):
+        # 依照給予的檔名儲存單篇文章
         try:
             # check folder
             file_path = self.file_root + 'Ptt/' + board + '/' + data['Date'][0:8] + '/'
@@ -266,6 +274,7 @@ class PttCrawler(object):
             self.log.error(u'在 Check Folder or Save File 時出現錯誤\nfilename:{0}'.format(filename))
 
     def crawl(self, board='Gossiping', start=1, end=2, sleep_time=0.5):
+        # 原作者的依照頁面範圍爬取方法
         self.board = board
         crawl_range = range(start, end)
 
@@ -279,10 +288,11 @@ class PttCrawler(object):
             start += 1
 
     def find_first_page(self, board, date):
-        # Find first page by date 根據日期尋找要從那一頁開始往回爬
+        # 根據日期尋找要從哪一頁開始往回爬
         url = self.root + board + '/index.html'
 
         while url:
+            set_idx = {'公告', '協尋'}
             res = self.session.get(url, verify=False)
             soup = BeautifulSoup(res.text, 'lxml')
 
@@ -294,7 +304,7 @@ class PttCrawler(object):
                     # 搜尋時跳過首頁的置底公告
                     m = re.search(r'\[(.*?)\]', d.select('.title')[0].select('a')[0].text)
                     if m:
-                        if m.groups(1)[0] == '公告':
+                        if m.groups(1)[0] in set_idx :
                             home_apge = 0
                             break
 
@@ -305,11 +315,13 @@ class PttCrawler(object):
             paging_div = soup.find('div', 'btn-group btn-group-paging')
             url = self.main + paging_div.find_all('a')[1]['href']
 
-    def auto_crawl(self, board='Gossiping', date_path=None, sleep_time=0.5):
+    def crawl_by_date(self, board='Gossiping', date_path=None, sleep_time=0.5):
         """
         :param board: str, PTT board name like 'Gossiping'
         :param date_path: str, format= %Y%m%d ex.'20170613' 
         :param sleep_time: float, every epoch sleep sleep_time sec
+        
+        根據輸入日期格式 '%Y%m%d'(如 '20170313') 爬取所有當日文章
         """
         today_articles = list()
 
@@ -318,9 +330,8 @@ class PttCrawler(object):
             date = time.strftime('%m/%d').lstrip('0')
             date_path = time.strftime('%Y%m%d')
         else:
-            # date = date_path[4:]
-            # date = (date[:2] + '/' + date[2:]).lstrip('0')
-            date = time.strftime('%m/%d', time.localtime(time.mktime(time.strptime(date_path, '%Y%m%d')))).lstrip('0')
+            # 轉換日期格式 20170313 -> 3/13
+            date = time.strftime('%m/%d', time.strptime(date_path, '%Y%m%d')).lstrip('0')
 
         first_page = self.find_first_page(board, date)
 
