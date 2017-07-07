@@ -11,6 +11,8 @@ import re
 from bs4 import BeautifulSoup
 from bs4.element import NavigableString
 
+from LinkKafka import send_json_kafka
+
 import logging
 import logging.config
 
@@ -269,6 +271,8 @@ class PttCrawler(object):
 
             with open(file_path + filename + '.json', 'w') as op:
                 json.dump(data, op, indent=4, ensure_ascii=False)
+
+            send_json_kafka(json.dumps(data))
         except Exception as e:
             self.log.exception(e)
             self.log.error(u'在 Check Folder or Save File 時出現錯誤\nfilename:{0}'.format(filename))
