@@ -8,8 +8,8 @@ if __name__ == '__main__':
     # art = crawler.parse_article('https://www.ptt.cc/bbs/Gossiping/M.1496931521.A.C3E.html')
 
     crawler = PttCrawler()
-    # crawler.crawl_by_date(board='Gossiping')
-    crawler.crawl_by_date(board='Gossiping', date_path='20170705')
+    crawler.crawl_by_date(board='Gossiping')
+    # crawler.crawl_by_date(board='Gossiping', date_path='20170705')
 
     # 針對 parse_article 做測試
     # art = crawler.parse_article('https://www.ptt.cc/bbs/Gossiping/M.1496420533.A.B5F.html')

@@ -62,24 +62,38 @@ class PttCrawler(object):
         self.log.addHandler(file_hdlr)
         self.log.addHandler(console_hdlr)
 
-    def get_articles(self, page, date, json_file):
-        # 從指定頁面找可以爬取的文章
+    def get_articles(self, page, date, check_set):
+        """ 
+        
+        從指定頁面找可以爬取的文章
+        
+        :param page: 
+        :param date: 
+        :param check_set: 
+        :return: articles, prev_url, new_arts_meta
+        articles : 將要爬取的文章 url
+        prev_url : 下一頁的 url
+        new_arts : 將要爬取的文章 meta data
+        """
+        # return
         res = self.session.get(page, verify=False)
         soup = BeautifulSoup(res.text, 'lxml')
 
         # Load got files list
-        with open(json_file, 'r') as rf:
-            got_articles = json.load(rf)
+        # with open(json_file, 'r') as rf:
+        #     check_set = json.load(rf)
 
-        check_set = set()
-        if len(got_articles) > 0:
-            for i in got_articles:
-                check_set.add(i['href'])
+        # check_set = set()
+        # if len(got_articles) > 0:
+        #     for href in got_articles:
+        #         check_set.add(href)
+
+        new_arts_meta = dict()
 
         articles = []  # 儲存取得的文章資料
         divs = soup.find_all('div', 'r-ent')
         for d in divs:
-            # Check 有超連結，表示文章存在、未被刪除。並且發文日期正確
+            # Check 有超連結，表示文章存在、未被刪除，並確認發文日期正確
             if d.find('a') and d.find('div', 'date').string.strip() == date:
                 href = self.main + d.find('a')['href']
                 # Check link is not redundant. 避免重複爬取文章
@@ -95,19 +109,18 @@ class PttCrawler(object):
                     title = d.find('a').string
                     # Add to got articles list
                     articles.append(href)
-                    got_articles.append({
-                        'title': title,
-                        'href': href,
-                        'push_count': push_count
+                    new_arts_meta.update({
+                        href: {'title': title,
+                               'push_count': push_count}
                     })
 
-        with open(json_file, 'w') as op:
-            json.dump(got_articles, op, indent=4, ensure_ascii=False)
+        # with open(json_file, 'w') as op:
+        #     json.dump(got_articles, op, indent=4, ensure_ascii=False)
 
         # 取得上一頁的連結
         paging_div = soup.find('div', 'btn-group btn-group-paging')
         prev_url = self.main + paging_div.find_all('a')[1]['href']
-        return articles, prev_url
+        return articles, prev_url, new_arts_meta
 
     def articles(self, page):
         # 原作者的文章回傳方式
@@ -261,7 +274,7 @@ class PttCrawler(object):
 
         return article
 
-    def save_article(self, board, filename, data):
+    def save_article(self, board, filename, data, meta_new, meta_old, json_today):
         # 依照給予的檔名儲存單篇文章
         try:
             # check folder
@@ -272,7 +285,14 @@ class PttCrawler(object):
             with open(file_path + filename + '.json', 'w') as op:
                 json.dump(data, op, indent=4, ensure_ascii=False)
 
+            # 存檔完沒掛掉就傳到 kafka
             send_json_kafka(json.dumps(data))
+
+            # 都沒掛掉就存回 meta date
+            meta_old.update({data['URL']: meta_new[data['URL']]})
+            with open(json_today, 'w') as wf:
+                json.dump(meta_old, wf, indent=4, ensure_ascii=False)
+
         except Exception as e:
             self.log.exception(e)
             self.log.error(u'在 Check Folder or Save File 時出現錯誤\nfilename:{0}'.format(filename))
@@ -327,7 +347,9 @@ class PttCrawler(object):
         
         根據輸入日期格式 '%Y%m%d'(如 '20170313') 爬取所有當日文章
         """
-        today_articles = list()
+        list_articles_url = list()
+        art_meta_new = dict()
+        art_meta_old = dict()
 
         if not date_path:
             # 不指定就爬今天
@@ -349,24 +371,29 @@ class PttCrawler(object):
         json_today = file_path + date_path + '.json'
         if not os.path.isfile(json_today):
             with open(json_today, 'w') as wf:
-                json.dump(today_articles, wf)
+                json.dump(art_meta_new, wf)
+        else:
+            with open(json_today, 'r') as rf:
+                art_meta_old = json.load(rf)
 
-        articles, pre_link = self.get_articles(first_page, date, json_today)
+        # 只要本頁有找到今天的文章，就繼續往前一頁爬
+        articles, pre_link, new_art = self.get_articles(first_page, date, art_meta_old)
         while articles:
-            today_articles += articles
-            articles, pre_link = self.get_articles(pre_link, date, json_today)
+            list_articles_url += articles
+            art_meta_new.update(new_art)
+            articles, pre_link, new_art = self.get_articles(pre_link, date, art_meta_old)
 
         self.log.info('Crawl by date: %s' % date_path)
         self.log.info('first_page : %s' % first_page)
         self.log.info('Data store at : %s' % file_path)
-        self.log.info('Num of target articles : {0}'.format(len(today_articles)))
+        self.log.info('Num of target articles : {0}'.format(len(list_articles_url)))
 
-        for art_link in today_articles:
+        for art_link in list_articles_url:
             art = self.parse_article(art_link)
             try:
                 file_name = '%s_' % art['Date'] + str(art['Title']) + '_%s' % art['Author']
             except Exception as e:
                 self.log.exception(e)
                 file_name = 'UnkownFileName_%d' % time.time()
-            self.save_article(board, file_name, art)
+            self.save_article(board, file_name, art, art_meta_new, art_meta_old, json_today)
             time.sleep(sleep_time)
