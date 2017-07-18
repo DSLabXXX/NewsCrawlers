@@ -58,31 +58,26 @@ class AppleCrawler(object):
         target_page = self.root
 
         if index_range is None:
-            yield target_page
+            yield target_page, index_range
         else:
             for index in index_range:
-                yield target_page + index
+                yield target_page + index, index
 
     def articles(self, page):
         res = self.session.get(page, verify=False)
         soup = BeautifulSoup(res.text, 'lxml')
 
-        n_child = 0
         for clearmen in soup.select('.clearmen'):
-            # '.clearmen:nth-child(3)'
-            if n_child != 3:
-                n_child += 1
-            else:
-                for article in clearmen.select('.fillup a'):
-                    try:
-                        # 因應 href 格式不同
-                        if 'home.appledaily' in article['href'] or self.domain in article['href']:
-                            yield article['href']
-                        else:
-                            yield self.domain + article['href']
-                    except Exception as e:
-                        # (本文已被刪除)
-                        self.log.exception(e)
+            for article in clearmen.select('.fillup a'):
+                try:
+                    # 因應 href 格式不同
+                    if 'home.appledaily' in article['href'] or self.domain in article['href']:
+                        yield article['href']
+                    else:
+                        yield self.domain + article['href']
+                except Exception as e:
+                    # (本文已被刪除)
+                    self.log.exception(e)
 
     def parse_article(self, url):
         raw = self.session.get(url, verify=False)
@@ -112,6 +107,13 @@ class AppleCrawler(object):
             # 取得內文
             content = ''
             # apple 新聞摘要 '#introid'
+            tag_p = soup.find_all('p')
+            tag_h2 = soup.find_all('h2', attrs={'id': 'bhead'})
+            for i in tag_p:
+                print(i.text)
+            for j in tag_h2:
+                print(j.text)
+            print()
 
 
         except Exception as e:
@@ -132,14 +134,16 @@ class AppleCrawler(object):
                 return date_list
             else:
                 return [begin_date]
-        for day_page in self.pages(cal_days(start, end)):
+        for day_page, date in self.pages(cal_days(start, end)):
             for article in self.articles(day_page):
                 print(article)
-                self.parse_article(article)
+                if date in article:
+                    self.parse_article(article)
+
                 time.sleep(sleep_time)
 
 
 if __name__ == '__main__':
     apple = AppleCrawler()
     # apple.crawl_by_date('20170713', '20170714')
-    apple.crawl_by_date('20170713', '20170713')
+    apple.crawl_by_date('20170717', '20170717')
