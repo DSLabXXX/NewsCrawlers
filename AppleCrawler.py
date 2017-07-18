@@ -87,9 +87,10 @@ class AppleCrawler(object):
             article = dict()
 
             article['URL'] = url
+            # .nust
+            article['Category'] = ''
 
-            # 取得文章作者與文章標題
-            article['Author'] = ''
+            # 取得文章標題
             try:
                 # 因應標題格式不同
                 title = soup.select('#h1')[0].contents[0]
@@ -106,14 +107,41 @@ class AppleCrawler(object):
 
             # 取得內文
             content = ''
-            # apple 新聞摘要 '#introid'
-            tag_p = soup.find_all('p')
-            tag_h2 = soup.find_all('h2', attrs={'id': 'bhead'})
-            for i in tag_p:
-                print(i.text)
-            for j in tag_h2:
-                print(j.text)
+            tags = soup.select('.trans')[0]
+            for tag in tags:
+                if tag.name == 'p' or tag.name == 'h2':
+                    if tag.text != ' ':
+                        if tag.name == 'h2':
+                            content += '\n'
+                        content += tag.text
+            article['Content'] = content
+            print('final content: ', article['Content'])
+
+            # 取得圖片
+            img_link = []
+            for img in soup.select('.trans figure'):
+                img_link.append(img.find('a')['href'])
+            article['ImgUrl'] = img_link
+            article['LinkUrl'] = []
+
+            # Other keys
+            # -----------------------------------------------------------------------
+            article['Push'] = ''
+            article['Author'] = ''
+            # for NLP
+            article['KeyWord'] = ''
+            article['SplitText'] = ''
+            # for NER
+            article['Org'] = ''
+            article['People'] = ''
+            article['Location'] = ''
+            # for Analysis
+            article['Event'] = ''
+            article['HDFSurl'] = ''
+
+            article['Source'] = 'AppleDaily'
             print()
+
 
 
         except Exception as e:
