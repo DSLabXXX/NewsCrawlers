@@ -3,7 +3,6 @@
 import json
 import requests
 import time
-import datetime
 import os
 import re
 
@@ -11,47 +10,16 @@ from bs4 import BeautifulSoup
 from bs4.element import Tag
 
 from LinkKafka import send_json_kafka
+from Common import cal_days
 
-import logging
-import logging.config
+from Crawler import Crawler
 
 
-class AppleCrawler(object):
+class AppleCrawler(Crawler):
     domain = 'http://www.appledaily.com.tw'
     root = domain + '/appledaily/archive/'
 
-    # File path. Will be removed in later version and using config file to instead of it.
-    file_root = '/data1/'
     news_name = 'AppleDaily'
-
-    moon_trans = {'Jan': '01', 'Feb': '02', 'Mar': '03', 'Apr': '04',
-                  'May': '05', 'Jun': '06', 'Jul': '07', 'Aug': '08',
-                  'Sep': '09', 'Oct': '10', 'Nov': '11', 'Dec': '12'}
-
-    def __init__(self):
-        self.session = requests.session()
-        requests.packages.urllib3.disable_warnings()
-        self.log = logging.getLogger('AppleCrawler')
-        # self.set_log_conf()
-
-    def set_log_conf(self):
-        # 設定log
-        self.log.setLevel(logging.DEBUG)
-
-        # Log file 看得到 DEBUG
-        file_hdlr = logging.FileHandler('log/' + time.strftime('%Y%m%d%H%M') + '_AppleNews.log')
-        file_hdlr.setLevel(logging.DEBUG)
-
-        # Command line 看不到 DEBUG
-        console_hdlr = logging.StreamHandler()
-        console_hdlr.setLevel(logging.INFO)
-
-        formatter = logging.Formatter('%(levelname)-8s - %(asctime)s - %(name)-12s - %(message)s')
-        file_hdlr.setFormatter(formatter)
-        console_hdlr.setFormatter(formatter)
-
-        self.log.addHandler(file_hdlr)
-        self.log.addHandler(console_hdlr)
 
     def pages(self, index_range=None):
         target_page = self.root
@@ -99,7 +67,7 @@ class AppleCrawler(object):
             # 處理大標題
             big_category = ''
             if soup.select('label a'):
-                big_category = soup.select('label a').text.replace(u'\xa0', u'')
+                big_category = soup.select('label a')[0].text.replace(u'\xa0', u'')
             article['BigCategory'] = big_category
 
             # 取得文章標題
@@ -152,7 +120,7 @@ class AppleCrawler(object):
             article['HDFSurl'] = ''
             article['Value'] = ''
 
-            article['Source'] = 'AppleDaily'
+            article['Source'] = self.news_name
 
             return article
         except Exception as e:
@@ -185,23 +153,11 @@ class AppleCrawler(object):
             self.log.error(u'在 Check Folder or Save File 時出現錯誤\nfilename:{0}'.format(filename))
 
     def crawl_by_date(self, start=None, end=None, sleep_time=.87):
-        def cal_days(begin_date=None, end_date=None):
-            if end_date:
-                # 找出start -> end 之間的每一天
-                date_list = []
-                begin_date = datetime.datetime.strptime(begin_date, "%Y%m%d")
-                end_date = datetime.datetime.strptime(end_date, "%Y%m%d")
-                while begin_date <= end_date:
-                    date_str = begin_date.strftime("%Y%m%d")
-                    date_list.append(date_str)
-                    begin_date += datetime.timedelta(days=1)
-                return date_list
-            else:
-                return [begin_date]
-        for day_page, date in self.pages(cal_days(start, end)):
+        for day_page, date in self.pages(cal_days(start, end, format_in="%Y%m%d", format_out="%Y%m%d")):
             for catergory, article in self.articles(day_page):
                 print(article)
                 art = self.parse_article(catergory, article)
+                print(art)
                 file_name = '%s_' % art['Date'] + str(art['Title'])
                 # self.save_article(board, file_name, art, art_meta_new, art_meta_old, json_today, send)
 
@@ -212,4 +168,4 @@ if __name__ == '__main__':
     apple = AppleCrawler()
     # apple.crawl_by_date('20170713', '20170714')
     # apple.crawl_by_date('20170717', '20170718')
-    apple.crawl_by_date('20170714')
+    apple.crawl_by_date('20170719')
