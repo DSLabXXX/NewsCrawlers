@@ -1,16 +1,12 @@
 # -*- coding: UTF-8 -*-
 
-import json
 import requests
 import time
-import os
-import re
 
 from bs4 import BeautifulSoup
 from bs4.element import Tag
 
-from LinkKafka import send_json_kafka
-from Common import cal_days
+from Common import cal_days, check_folder, check_meta
 
 from Crawler import Crawler
 
@@ -21,16 +17,8 @@ class AppleCrawler(Crawler):
 
     news_name = 'AppleDaily'
 
-    def pages(self, index_range=None):
-        target_page = self.root
-
-        if index_range is None:
-            yield target_page, index_range
-        else:
-            for index in index_range:
-                yield target_page + index, index
-
-    def articles(self, page):
+    # 依據給予的頁面找尋可爬的新聞連結
+    def articles(self, page, meta):
         res = self.session.get(page, verify=False)
         soup = BeautifulSoup(res.text, 'lxml')
 
@@ -49,11 +37,13 @@ class AppleCrawler(Crawler):
                                     href = link['href']
                                 else:
                                     href = self.domain + link['href']
-                                yield catergory, href
+                                if href not in meta:
+                                    yield catergory, href
                 except Exception as e:
                     self.log.exception(e)
-                    self.log.error('在解析首頁超連結時出現問題')
+                    self.log.error('在解析首頁超連結 %s 時出現問題' % page)
 
+    # 解析 Apple 新聞文章內容
     def parse_article(self, catergory, url):
         raw = self.session.get(url, verify=False)
         soup = BeautifulSoup(raw.text, 'lxml')
@@ -83,7 +73,7 @@ class AppleCrawler(Crawler):
 
             # 取得文章 Date 如 '20170313' 其實可以用傳的就好
             date = soup.select('#maincontent time')[0].contents[0]
-            article['Date'] = time.strftime('%Y%d%m', time.strptime(date, '%Y年%m月%d日'))
+            article['Date'] = time.strftime('%Y%m%d', time.strptime(date, '%Y年%m月%d日'))
 
             # 取得內文
             content = ''
@@ -127,39 +117,18 @@ class AppleCrawler(Crawler):
             self.log.exception(e)
             self.log.error(u'在分析 %s 時出現錯誤' % url)
 
-    def save_article(self, board, filename, data, meta_new, meta_old, json_today, send):
-        # 依照給予的檔名儲存單篇文章
-        try:
-            # check folder
-            file_path = self.file_root + self.news_name + '/' + data['Date'][0:8] + '/'
-            if not os.path.isdir(file_path):
-                os.makedirs(file_path)
-
-            with open(file_path + filename + '.json', 'w') as op:
-                json.dump(data, op, indent=4, ensure_ascii=False)
-
-            # 存檔完沒掛掉就傳到 kafka
-            if send:
-                send_json_kafka(json.dumps(data))
-
-            # 都沒掛掉就存回 meta date
-            meta_old.update({data['URL']: meta_new[data['URL']]})
-            with open(json_today, 'w') as wf:
-                json.dump(meta_old, wf, indent=4, ensure_ascii=False)
-            self.log.info('已完成爬取 %s' %data.get('Title'))
-
-        except Exception as e:
-            self.log.exception(e)
-            self.log.error(u'在 Check Folder or Save File 時出現錯誤\nfilename:{0}'.format(filename))
-
-    def crawl_by_date(self, start=None, end=None, sleep_time=.87):
+    def crawl_by_date(self, start=None, end=None, sleep_time=.87, send=False):
         for day_page, date in self.pages(cal_days(start, end, format_in="%Y%m%d", format_out="%Y%m%d")):
-            for catergory, article in self.articles(day_page):
-                print(article)
+            file_path = self.file_root + self.news_name + '/' + date + '/'
+            check_folder(file_path)
+
+            meta_path = file_path + date + '.json'
+            meta_old = check_meta(meta_path)
+
+            for catergory, article in self.articles(day_page, meta_old):
                 art = self.parse_article(catergory, article)
-                print(art)
                 file_name = '%s_' % art['Date'] + str(art['Title'])
-                # self.save_article(board, file_name, art, art_meta_new, art_meta_old, json_today, send)
+                self.save_article(file_name, art, meta_old, meta_path, send=send)
 
                 time.sleep(sleep_time)
 
@@ -168,4 +137,4 @@ if __name__ == '__main__':
     apple = AppleCrawler()
     # apple.crawl_by_date('20170713', '20170714')
     # apple.crawl_by_date('20170717', '20170718')
-    apple.crawl_by_date('20170719')
+    apple.crawl_by_date('20170713', send=True)

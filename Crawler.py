@@ -3,6 +3,11 @@
 import requests
 
 import time
+import json
+import os
+
+from LinkKafka import send_json_kafka
+from Common import cal_days, check_folder, check_meta
 
 import logging
 import logging.config
@@ -48,3 +53,41 @@ class Crawler(object):
         self.log.addHandler(file_hdlr)
         self.log.addHandler(console_hdlr)
 
+    def pages(self, index_range=None):
+        target_page = self.root
+
+        if index_range is None:
+            yield target_page, index_range
+        else:
+            for index in index_range:
+                yield target_page + index, index
+
+    def save_article(self, filename, data, meta_old, meta_path, send):
+        # 依照給予的檔名儲存單篇文章
+        try:
+            # check folder
+            file_path = os.path.join(self.file_root, self.news_name, data['Date'][0:8],
+                                     data['BigCategory'], data['Category'])
+            check_folder(file_path)
+
+            with open(os.path.join(file_path, filename + '.json'), 'w') as op:
+                json.dump(data, op, indent=4, ensure_ascii=False)
+
+            # 存檔完沒掛掉就傳到 kafka
+            if send:
+                send_json_kafka(json.dumps(data))
+
+            # 都沒掛掉就存回 meta date
+            meta_old.update({
+                data['URL']: {'Title': data['Title'],
+                              'Category': data['Category'],
+                              'BigCategory': data['BigCategory']}
+            })
+
+            with open(meta_path, 'w') as wf:
+                json.dump(meta_old, wf, indent=4, ensure_ascii=False)
+            self.log.info('已完成爬取 %s' % data.get('Title'))
+
+        except Exception as e:
+            self.log.exception(e)
+            self.log.error(u'在 Check Folder or Save File 時出現錯誤\nfilename:{0}'.format(filename))

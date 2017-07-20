@@ -1,8 +1,10 @@
 import datetime
 import time
+import os
+import json
 
 
-def cal_days(self, begin_date=None, end_date=None, format_in="%Y%m%d", format_out="%Y%m%d"):
+def cal_days(begin_date=None, end_date=None, format_in="%Y%m%d", format_out="%Y%m%d"):
     if end_date:
         # 找出start -> end 之間的每一天
         date_list = []
@@ -22,3 +24,20 @@ def cal_days(self, begin_date=None, end_date=None, format_in="%Y%m%d", format_ou
             return [datetime.datetime.strptime(begin_date, format_in).strftime(format_out)]
         else:
             return [time.strftime(format_out)]
+
+
+def check_folder(file_path):
+    # check folder
+    if not os.path.isdir(file_path):
+        os.makedirs(file_path)
+
+
+def check_meta(meta_path):
+    art_meta = {}
+    if not os.path.isfile(meta_path):
+        with open(meta_path, 'w') as wf:
+            json.dump(art_meta, wf)
+    else:
+        with open(meta_path, 'r') as rf:
+            art_meta = json.load(rf)
+    return art_meta
