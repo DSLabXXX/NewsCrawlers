@@ -129,17 +129,50 @@ class ChinatimesCrawler(Crawler):
             for catergory, article in self.articles(pages, meta_old):
                 # print(catergory, article)
                 art = self.parse_article(catergory, article)
-                print(art)
-            #     try:
-            #         file_name = '%s_' % art['Date'] + str(art['Title'])
-            #     except Exception as e:
-            #         self.log.exception(e)
-            #         file_name = 'UnkownFileName_%d' % time.time()
-            #     self.save_article(file_name, art, meta_old, meta_path, send=send)
-            #
+                # print(art)
+                try:
+                    file_name = '%s_' % art['Date'] + str(art['Title'])
+                except Exception as e:
+                    self.log.exception(e)
+                    file_name = 'UnkownFileName_%d' % time.time()
+                self.save_article(file_name, art, meta_old, meta_path, send=send)
+
                 time.sleep(sleep_time)
 
+
+# 工商時報
+class BusinessTimesCrawlwer(ChinatimesCrawler):
+    root_num = '-2602'
+    news_name = 'BusinessTimes'
+    carwler_name = 'BusinessTimesCrawler'
+
+
+# 旺報
+class DogNewsCrawler(ChinatimesCrawler):
+    root_num = '-2603'
+    news_name = 'DogNews'
+    carwler_name = 'DogNewsCrawler'
+
+
+# 即時新聞（中時電子報）
+class ChinaElectronicsNewsCrawler(ChinatimesCrawler):
+    root_num = '-2604'
+    news_name = 'ChinaElectronicsNews'
+    carwler_name = 'ChinaElectronicsNewsCrawler'
+
+
 if __name__ == '__main__':
+    start = '20170723'
+    end = '20170723'
+    send = True
+
     china_times = ChinatimesCrawler()
-    china_times.crawl_by_date('20170701', '20170701', send=False)
-    # china_times.parse_article('政治要聞', 'http://www.chinatimes.com/newspapers/20170718000335-260118')
+    business_times = BusinessTimesCrawlwer()
+    dog = DogNewsCrawler()
+    china_electronics = ChinaElectronicsNewsCrawler()
+
+    china_times.crawl_by_date(start, end, send=send)
+    business_times.crawl_by_date(start, end, send=send)
+    dog.crawl_by_date(start, end, send=send)
+    china_electronics.crawl_by_date(start, end, send=send)
+
