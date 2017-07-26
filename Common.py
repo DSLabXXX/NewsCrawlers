@@ -2,6 +2,7 @@ import datetime
 import time
 import os
 import json
+import re
 
 
 def cal_days(begin_date=None, end_date=None, format_in="%Y%m%d", format_out="%Y%m%d"):
@@ -26,6 +27,10 @@ def cal_days(begin_date=None, end_date=None, format_in="%Y%m%d", format_out="%Y%
             return [time.strftime(format_out)]
 
 
+def trans_date_format(date, format_in, format_out):
+    return datetime.datetime.strptime(date, format_in).strftime(format_out)
+
+
 def check_folder(file_path):
     # check folder
     if not os.path.isdir(file_path):
@@ -41,3 +46,13 @@ def check_meta(meta_path):
         with open(meta_path, 'r') as rf:
             art_meta = json.load(rf)
     return art_meta
+
+
+def title_word_replace(text):
+    # 避免標題出現 '/' 等無法當作檔名的符號
+    # 輸入 text 為字串(str)
+    # 目前僅處理 '數字/數字' 的狀況QQ
+    # 以及將多出來的 '/' 用 ' ' 取代
+    text = re.sub(r'([0-9])/([0-9])', r'\1_\2', text)
+    text = text.replace('/', ' ')
+    return text

@@ -6,7 +6,7 @@ import time
 from bs4 import BeautifulSoup
 from bs4.element import Tag
 
-from Common import cal_days, check_folder, check_meta
+from Common import cal_days, check_folder, check_meta, title_word_replace
 
 from Crawler import Crawler
 
@@ -16,6 +16,7 @@ class AppleCrawler(Crawler):
     root = domain + '/appledaily/archive/'
 
     news_name = 'AppleDaily'
+    carwler_name = 'AppleCrawler'
 
     # 依據給予的頁面找尋可爬的新聞連結
     def articles(self, page, meta):
@@ -27,7 +28,8 @@ class AppleCrawler(Crawler):
                 try:
                     if type(tag) is Tag:
                         if tag.name == 'section':
-                            art = tag.select('article.nclns')[0]
+                            if tag.select('article.nclns'):
+                                art = tag.select('article.nclns')[0]
                         elif tag.name == 'article':
                             art = tag
                         catergory = art.find('h2').text
@@ -45,10 +47,10 @@ class AppleCrawler(Crawler):
 
     # 解析 Apple 新聞文章內容
     def parse_article(self, catergory, url):
-        raw = self.session.get(url, verify=False)
-        soup = BeautifulSoup(raw.text, 'lxml')
-
         try:
+            raw = self.session.get(url, verify=False)
+            soup = BeautifulSoup(raw.text, 'lxml')
+
             article = dict()
 
             article['URL'] = url
@@ -69,7 +71,7 @@ class AppleCrawler(Crawler):
                     title = soup.select('div + h1')[0].contents[0]
                 except Exception as e:
                     title = ''
-            article['Title'] = title
+            article['Title'] = title_word_replace(title)
 
             # 取得文章 Date 如 '20170313' 其實可以用傳的就好
             date = soup.select('#maincontent time')[0].contents[0]
@@ -89,7 +91,10 @@ class AppleCrawler(Crawler):
             # 取得圖片連結
             img_link = []
             for img in soup.select('.trans figure'):
-                img_link.append(img.find('a')['href'])
+                try:
+                    img_link.append(img.find('a')['href'])
+                except Exception as e:
+                    self.log.exception(e)
             article['ImgUrl'] = img_link
             article['LinkUrl'] = []
 
@@ -99,7 +104,7 @@ class AppleCrawler(Crawler):
             article['Author'] = ''
             article['AuthorIp'] = ''
             # for NLP
-            article['KeyWord'] = ''
+            article['KeyWord'] = []
             article['SplitText'] = ''
             # for NER
             article['Org'] = ''
@@ -127,7 +132,11 @@ class AppleCrawler(Crawler):
 
             for catergory, article in self.articles(day_page, meta_old):
                 art = self.parse_article(catergory, article)
-                file_name = '%s_' % art['Date'] + str(art['Title'])
+                try:
+                    file_name = '%s_' % art['Date'] + str(art['Title'])
+                except Exception as e:
+                    self.log.exception(e)
+                    file_name = 'UnkownFileName_%d' % time.time()
                 self.save_article(file_name, art, meta_old, meta_path, send=send)
 
                 time.sleep(sleep_time)
@@ -137,4 +146,4 @@ if __name__ == '__main__':
     apple = AppleCrawler()
     # apple.crawl_by_date('20170713', '20170714')
     # apple.crawl_by_date('20170717', '20170718')
-    apple.crawl_by_date('20170713', send=True)
+    apple.crawl_by_date('20170714', '20170715', send=True)

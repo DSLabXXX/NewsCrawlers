@@ -6,7 +6,7 @@ import time
 from bs4 import BeautifulSoup
 from bs4.element import Tag
 
-from Common import cal_days, check_folder, check_meta
+from Common import cal_days, check_folder, check_meta, title_word_replace
 
 from Crawler import Crawler
 
@@ -18,6 +18,7 @@ class LtnCrawler(Crawler):
     root = domain + '/list/newspaper/focus/'
 
     news_name = 'LTN'
+    carwler_name = 'LTNCrawler'
 
     cate_trans = {'focus': '焦點', 'politics': '政治', 'society': '社會', 'local': '地方',
                   'life': '生活', 'opinion': '評論', 'world': '國際', 'business': '財經',
@@ -37,18 +38,20 @@ class LtnCrawler(Crawler):
                     self.log.exception(e)
                     self.log.error('在解析首頁超連結時出現問題')
 
-    def articles(self, page, meta):
-        res = self.session.get(page, verify=False)
-        soup = BeautifulSoup(res.text, 'lxml')
+    def articles(self, pages, meta):
+        for page in pages:
+            res = self.session.get(page, verify=False)
+            soup = BeautifulSoup(res.text, 'lxml')
 
-        for ul in soup.select('.list'):
-            for li in ul.select('li'):
-                href = self.domain + li.select('a.ph')[0]['href']
-                cate = li.select('.newspapertag')[0].text
-                if href not in meta:
-                    yield cate, href
+            for ul in soup.select('.list'):
+                for li in ul.select('li'):
+                    href = self.domain + li.select('a.ph')[0]['href']
+                    cate = li.select('.newspapertag')[0].text
+                    if href not in meta:
+                        yield cate, href
 
-    def add_content(self, tag, content):
+    @staticmethod
+    def add_content(tag, content):
         if tag.name == 'h4':
             content += '\n' + tag.text + '\n'
         elif tag.name == 'p':
@@ -89,10 +92,10 @@ class LtnCrawler(Crawler):
         return date, content, img_link
 
     def parse_article(self, category, url):
-        raw = self.session.get(url, verify=False)
-        soup = BeautifulSoup(raw.text, 'lxml')
-
         try:
+            raw = self.session.get(url, verify=False)
+            soup = BeautifulSoup(raw.text, 'lxml')
+
             article = dict()
 
             article['URL'] = url
@@ -107,11 +110,11 @@ class LtnCrawler(Crawler):
             article['BigCategory'] = big_category
 
             # 取得文章標題
-            if soup.select('h2'):
+            if article['BigCategory'] == '評論':
                 title = soup.select('h2')[0].contents[0]
             else:
                 title = soup.select('h1')[0].contents[0].replace('				', '')
-            article['Title'] = title
+            article['Title'] = title_word_replace(title)
 
             # 取得文章 Date 如 '20170313' or '20170313060000'
             # 取得內文 '應為美老虎隊的編隊飛行表演隊成員六十三歲的應天華...'
@@ -164,6 +167,16 @@ class LtnCrawler(Crawler):
             self.log.exception(e)
             self.log.error(u'在分析 %s 時出現錯誤' % url)
 
+    def next_page(self, page):
+        res = self.session.get(page, verify=False)
+        soup = BeautifulSoup(res.text, 'lxml')
+
+        if soup.find('a', 'p_next'):
+            for i in soup.select('a.p_next'):
+                return i['href']
+
+        return None
+
     def crawl_by_date(self, start=None, end=None, sleep_time=.87, send=False):
 
         for day_page, date in self.pages(cal_days(start, end)):
@@ -174,21 +187,33 @@ class LtnCrawler(Crawler):
             meta_old = check_meta(meta_path)
 
             for page in self.classes(day_page):
-                for catergory, article in self.articles(page, meta_old):
+                # 找出所有頁面
+                next_page = page
+                pages = []
+                while next_page:
+                    next_page = self.next_page(next_page)
+                    if next_page:
+                        pages.append(next_page)
+
+                for catergory, article in self.articles(pages, meta_old):
                     art = self.parse_article(catergory, article)
-                    print(art)
-                    file_name = '%s_' % art['Date'] + str(art['Title'])
-                    # self.save_article(file_name, art, meta_old, meta_path, send=send)
+                    try:
+                        file_name = '%s_' % art['Date'] + str(art['Title'])
+                    except Exception as e:
+                        self.log.exception(e)
+                        file_name = 'UnkownFileName_%d' % time.time()
+                    self.save_article(file_name, art, meta_old, meta_path, send=send)
 
                     time.sleep(sleep_time)
 
 
 if __name__ == '__main__':
     ltn = LtnCrawler()
-    ltn.crawl_by_date('20170716', '20170718', send=False)
+    ltn.crawl_by_date('20170716', '20170716', send=True)
 
     # test
     # art = ltn.parse_article('sss', 'http://news.ltn.com.tw/news/business/paper/1119589')
     # art = ltn.parse_article('opinion', 'http://news.ltn.com.tw/news/opinion/paper/1119929')
     # art = ltn.parse_article('sport', 'http://news.ltn.com.tw/news/sports/paper/1119588')
     # art = ltn.parse_article('影視焦點', 'http://news.ltn.com.tw/news/entertainment/paper/1119851')
+

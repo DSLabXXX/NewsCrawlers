@@ -21,7 +21,6 @@ class ChinatimesCrawler(Crawler):
 
     def articles(self, pages, meta):
         for page in pages:
-            print('\npage: ', page)
             res = self.session.get(page, verify=False)
             soup = BeautifulSoup(res.text, 'lxml')
 
@@ -162,8 +161,8 @@ class ChinaElectronicsNewsCrawler(ChinatimesCrawler):
 
 
 if __name__ == '__main__':
-    start = '20170723'
-    end = '20170723'
+    start = '20170722'
+    end = '20170722'
     send = True
 
     china_times = ChinatimesCrawler()
@@ -171,8 +170,21 @@ if __name__ == '__main__':
     dog = DogNewsCrawler()
     china_electronics = ChinaElectronicsNewsCrawler()
 
-    china_times.crawl_by_date(start, end, send=send)
-    business_times.crawl_by_date(start, end, send=send)
-    dog.crawl_by_date(start, end, send=send)
-    china_electronics.crawl_by_date(start, end, send=send)
+    import threading
+    ct = threading.Thread(target=china_times.crawl_by_date, args=(start, end, send))
+    ct.start()
+
+    bt = threading.Thread(target=business_times.crawl_by_date, args=(start, end, send))
+    bt.start()
+
+    dog = threading.Thread(target=dog.crawl_by_date, args=(start, end, send))
+    dog.start()
+
+    ce = threading.Thread(target=china_electronics.crawl_by_date, args=(start, end, send))
+    ce.start()
+
+
+
+
+
 

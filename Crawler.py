@@ -21,7 +21,7 @@ class Crawler(object):
     root = domain + '/appledaily/archive/'
 
     # File path. Will be removed in later version and using config file to instead of it.
-    file_root = '/data1/'
+    file_root = '/data1/Dslab_News/'
     log_root = 'log'
 
     moon_trans = {'Jan': '01', 'Feb': '02', 'Mar': '03', 'Apr': '04',
@@ -39,7 +39,10 @@ class Crawler(object):
         self.log.setLevel(logging.DEBUG)
 
         # Log file 看得到 DEBUG
-        file_hdlr = logging.FileHandler(self.log_root + '/' + time.strftime('%Y%m%d%H%M') + '_' + self.news_name + '.log')
+        log_path = os.path.join(self.log_root, self.news_name)
+        check_folder(log_path)
+        log_name = time.strftime('%Y%m%d%H%M') + '_' + self.news_name + '.log'
+        file_hdlr = logging.FileHandler(os.path.join(log_path, log_name))
         file_hdlr.setLevel(logging.DEBUG)
 
         # Command line 看不到 DEBUG
@@ -86,7 +89,7 @@ class Crawler(object):
 
             with open(meta_path, 'w') as wf:
                 json.dump(meta_old, wf, indent=4, ensure_ascii=False)
-            self.log.info('已完成爬取 %s' % data.get('Title'))
+            self.log.info('已完成爬取 %s > %s > %s' % (data.get('BigCategory'), data.get('Category'), data.get('Title')))
 
         except Exception as e:
             self.log.exception(e)
