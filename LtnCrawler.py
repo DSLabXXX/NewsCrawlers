@@ -189,7 +189,7 @@ class LtnCrawler(Crawler):
             for page in self.classes(day_page):
                 # 找出所有頁面
                 next_page = page
-                pages = []
+                pages = [page]
                 while next_page:
                     next_page = self.next_page(next_page)
                     if next_page:
@@ -209,11 +209,12 @@ class LtnCrawler(Crawler):
 
 if __name__ == '__main__':
     ltn = LtnCrawler()
-    ltn.crawl_by_date('20170716', '20170716', send=True)
+    ltn.crawl_by_date('20170822', '20170822', send=True)
 
     # test
     # art = ltn.parse_article('sss', 'http://news.ltn.com.tw/news/business/paper/1119589')
     # art = ltn.parse_article('opinion', 'http://news.ltn.com.tw/news/opinion/paper/1119929')
     # art = ltn.parse_article('sport', 'http://news.ltn.com.tw/news/sports/paper/1119588')
     # art = ltn.parse_article('影視焦點', 'http://news.ltn.com.tw/news/entertainment/paper/1119851')
+    # ltn.parse_article('focus', 'http://news.ltn.com.tw/list/newspaper')
 
