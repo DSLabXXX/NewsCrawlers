@@ -114,6 +114,9 @@ class LtnCrawler(Crawler):
                 title = soup.select('h2')[0].contents[0]
             else:
                 title = soup.select('h1')[0].contents[0].replace('				', '')
+                if title == ' compassfit_title_begin ':
+                    title = soup.select('h1')[0].contents[1].replace('				', '')
+
             article['Title'] = title_word_replace(title)
 
             # 取得文章 Date 如 '20170313' or '20170313060000'
@@ -213,6 +216,7 @@ if __name__ == '__main__':
 
     # test
     # art = ltn.parse_article('sss', 'http://news.ltn.com.tw/news/business/paper/1119589')
+    # art = ltn.parse_article('焦點', 'http://news.ltn.com.tw//news/focus/paper/1132665')
     # art = ltn.parse_article('opinion', 'http://news.ltn.com.tw/news/opinion/paper/1119929')
     # art = ltn.parse_article('sport', 'http://news.ltn.com.tw/news/sports/paper/1119588')
     # art = ltn.parse_article('影視焦點', 'http://news.ltn.com.tw/news/entertainment/paper/1119851')
