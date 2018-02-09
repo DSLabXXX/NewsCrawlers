@@ -45,7 +45,8 @@ class LtnCrawler(Crawler):
 
             for ul in soup.select('.list'):
                 for li in ul.select('li'):
-                    href = self.domain + li.select('a.ph')[0]['href']
+                    # 取得文章網址
+                    href = self.domain + '/' + li.select('a.ph')[0]['href']
                     cate = li.select('.newspapertag')[0].text
                     if href not in meta:
                         yield cate, href
@@ -116,7 +117,6 @@ class LtnCrawler(Crawler):
                 title = soup.select('h1')[0].contents[0].replace('				', '')
                 if title == ' compassfit_title_begin ':
                     title = soup.select('h1')[0].contents[1].replace('				', '')
-
             article['Title'] = title_word_replace(title)
 
             # 取得文章 Date 如 '20170313' or '20170313060000'
