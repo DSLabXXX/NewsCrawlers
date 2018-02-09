@@ -5,8 +5,9 @@ import requests
 import time
 import json
 import os
+# import shutil # great than os.path
 
-from LinkKafka import send_json_kafka
+# from LinkKafka import send_json_kafka
 from Common import cal_days, check_folder, check_meta
 
 import logging
@@ -22,7 +23,7 @@ class Crawler(object):
 
     # File path. Will be removed in later version and using config file to instead of it.
     file_root = '/data1/Dslab_News/'
-    log_root = 'log'
+    log_root = file_root + 'log/'
 
     moon_trans = {'Jan': '01', 'Feb': '02', 'Mar': '03', 'Apr': '04',
                   'May': '05', 'Jun': '06', 'Jul': '07', 'Aug': '08',
@@ -73,12 +74,17 @@ class Crawler(object):
                                      data['BigCategory'], data['Category'])
             check_folder(file_path)
 
-            with open(os.path.join(file_path, filename + '.json'), 'w') as op:
+            # 為了因應蘋果新聞url已被修改 但原來的url尚可使用 故判斷若已有檔案就不存直接跳出
+            filename_path = os.path.join(file_path, filename + '.json')
+            if os.path.exists(filename_path):
+                return 0
+
+            with open(filename_path, 'w') as op:
                 json.dump(data, op, indent=4, ensure_ascii=False)
 
             # 存檔完沒掛掉就傳到 kafka
-            if send:
-                send_json_kafka(json.dumps(data))
+            # if send:
+            #     send_json_kafka(json.dumps(data))
 
             # 都沒掛掉就存回 meta date
             meta_old.update({
@@ -89,7 +95,8 @@ class Crawler(object):
 
             with open(meta_path, 'w') as wf:
                 json.dump(meta_old, wf, indent=4, ensure_ascii=False)
-            self.log.info('已完成爬取 %s > %s > %s' % (data.get('BigCategory'), data.get('Category'), data.get('Title')))
+            self.log.info('已完成爬取 %s > %s > %s > %s' % (data.get('Date'), data.get('BigCategory'),
+                                                       data.get('Category'), data.get('Title')))
 
         except Exception as e:
             self.log.exception(e)
