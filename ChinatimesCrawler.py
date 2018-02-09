@@ -54,11 +54,11 @@ class ChinatimesCrawler(Crawler):
             article['BigCategory'] = ''
 
             # 取得文章標題
-            title = soup.select('.clear-fix h1')[0].contents[0]
+            title = soup.select('.clear-fix h1')[0].contents[0].strip()
             article['Title'] = title_word_replace(title)
 
             # 取得文章 Date 如 '20170313' 其實可以用傳的就好
-            date = soup.select('time')[0].text
+            date = soup.select('time')[0].text.strip()
             article['Date'] = time.strftime('%Y%m%d%H%M%S', time.strptime(date, '%Y年%m月%d日 %H:%M'))
 
             # 取得內文
@@ -161,8 +161,8 @@ class ChinaElectronicsNewsCrawler(ChinatimesCrawler):
 
 
 if __name__ == '__main__':
-    start = '20170722'
-    end = '20170722'
+    start = '20180209'
+    end = '20180209'
     send = True
 
     china_times = ChinatimesCrawler()
