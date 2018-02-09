@@ -11,7 +11,7 @@ import re
 from bs4 import BeautifulSoup
 from bs4.element import NavigableString
 
-from LinkKafka import send_json_kafka
+from Common import cal_days, check_folder, check_meta, title_word_replace
 
 import logging
 import logging.config
@@ -28,7 +28,7 @@ class PttCrawler(object):
     board = ''
 
     # File path. Will be removed in later version and using config file to instead of it.
-    file_root = '/data1/'
+    file_root = '/data1/Dslab_News/'
 
     moon_trans = {'Jan': '01', 'Feb': '02', 'Mar': '03', 'Apr': '04',
                   'May': '05', 'Jun': '06', 'Jul': '07', 'Aug': '08',
@@ -46,9 +46,10 @@ class PttCrawler(object):
     def set_log_conf(self):
         # 設定log
         self.log.setLevel(logging.DEBUG)
-
+        log_path = self.file_root + 'log/'
+        check_folder(log_path)
         # Log file 看得到 DEBUG
-        file_hdlr = logging.FileHandler('log/' + time.strftime('%Y%m%d%H%M') + '_PttGossiping.log')
+        file_hdlr = logging.FileHandler(log_path + time.strftime('%Y%m%d%H%M') + '_PttGossiping.log')
         file_hdlr.setLevel(logging.DEBUG)
 
         # Command line 看不到 DEBUG
@@ -79,15 +80,6 @@ class PttCrawler(object):
         res = self.session.get(page, verify=False)
         soup = BeautifulSoup(res.text, 'lxml')
 
-        # Load got files list
-        # with open(json_file, 'r') as rf:
-        #     check_set = json.load(rf)
-
-        # check_set = set()
-        # if len(got_articles) > 0:
-        #     for href in got_articles:
-        #         check_set.add(href)
-
         new_arts_meta = dict()
 
         articles = []  # 儲存取得的文章資料
@@ -113,9 +105,6 @@ class PttCrawler(object):
                         href: {'title': title,
                                'push_count': push_count}
                     })
-
-        # with open(json_file, 'w') as op:
-        #     json.dump(got_articles, op, indent=4, ensure_ascii=False)
 
         # 取得上一頁的連結
         paging_div = soup.find('div', 'btn-group btn-group-paging')
@@ -175,13 +164,6 @@ class PttCrawler(object):
             self.log.error(u'在分析 url 時出現錯誤')
         return img_urls, link_urls
 
-    def title_word_replace(self, text):
-        # 避免標題出現 '/' 等無法當作檔名的符號
-        # 輸入 text 為字串(str)
-        text = re.sub(r'([0-9])/([0-9])', r'\1_\2', text)
-        text = text.replace('/', ' ')
-        return text
-
     def parse_article(self, url):
         # 爬取ptt文章內容
         raw = self.session.get(url, verify=False)
@@ -194,7 +176,7 @@ class PttCrawler(object):
 
             # 取得文章作者與文章標題
             article['Author'] = soup.select('.article-meta-value')[0].contents[0].split(' ')[0]
-            article['Title'] = self.title_word_replace(soup.select('.article-meta-value')[2].contents[0])
+            article['Title'] = title_word_replace(soup.select('.article-meta-value')[2].contents[0])
 
             # 取得文章 Date 如 '20170313'
             article['Date'] = self.parse_date(soup.select('.article-meta-value')[-1].contents[0].split())
@@ -256,7 +238,7 @@ class PttCrawler(object):
             # Other keys
             # -----------------------------------------------------------------------
             # for NLP
-            article['KeyWord'] = ''
+            article['KeyWord'] = []
             article['SplitText'] = ''
             # for NER
             article['Org'] = ''
@@ -274,7 +256,7 @@ class PttCrawler(object):
 
         return article
 
-    def save_article(self, board, filename, data, meta_new, meta_old, json_today):
+    def save_article(self, board, filename, data, meta_new, meta_old, json_today, send):
         # 依照給予的檔名儲存單篇文章
         try:
             # check folder
@@ -286,12 +268,14 @@ class PttCrawler(object):
                 json.dump(data, op, indent=4, ensure_ascii=False)
 
             # 存檔完沒掛掉就傳到 kafka
-            send_json_kafka(json.dumps(data))
+            # if send:
+            #     send_json_kafka(json.dumps(data))
 
             # 都沒掛掉就存回 meta date
             meta_old.update({data['URL']: meta_new[data['URL']]})
             with open(json_today, 'w') as wf:
                 json.dump(meta_old, wf, indent=4, ensure_ascii=False)
+            self.log.info('已完成爬取 %s' %data.get('Title'))
 
         except Exception as e:
             self.log.exception(e)
@@ -305,7 +289,12 @@ class PttCrawler(object):
         for page in self.pages(board, crawl_range):
             for article in self.articles(page):
                 art = self.parse_article(article)
-                self.save_article(board, '%s_' % art['Date'] + str(art['Title']) + '_%s' % art['Author'], art)
+                try:
+                    file_name = '%s_' % art['Date'] + str(art['Title']) + '_%s' % art['Author']
+                except Exception as e:
+                    self.log.exception(e)
+                    file_name = 'UnkownFileName_%d' % time.time()
+                self.save_article(board, file_name, art)
                 time.sleep(sleep_time)
 
             self.log.error(u'已經完成 %s 頁面第 %d 頁的爬取' % (board, start))
@@ -316,7 +305,7 @@ class PttCrawler(object):
         url = self.root + board + '/index.html'
 
         while url:
-            set_idx = {'公告', '協尋'}
+            set_announcement = {'公告', '協尋'}
             res = self.session.get(url, verify=False)
             soup = BeautifulSoup(res.text, 'lxml')
 
@@ -328,7 +317,7 @@ class PttCrawler(object):
                     # 搜尋時跳過首頁的置底公告
                     m = re.search(r'\[(.*?)\]', d.select('.title')[0].select('a')[0].text)
                     if m:
-                        if m.groups(1)[0] in set_idx :
+                        if m.groups(1)[0] in set_announcement:
                             home_apge = 0
                             break
 
@@ -339,7 +328,7 @@ class PttCrawler(object):
             paging_div = soup.find('div', 'btn-group btn-group-paging')
             url = self.main + paging_div.find_all('a')[1]['href']
 
-    def crawl_by_date(self, board='Gossiping', date_path=None, sleep_time=0.5):
+    def crawl_by_date(self, board='Gossiping', date_path=None, sleep_time=1., send=False):
         """
         :param board: str, PTT board name like 'Gossiping'
         :param date_path: str, format= %Y%m%d ex.'20170613' 
@@ -347,6 +336,9 @@ class PttCrawler(object):
         
         根據輸入日期格式 '%Y%m%d'(如 '20170313') 爬取所有當日文章
         """
+        # if send:
+        #     from LinkKafka import send_json_kafka
+
         list_articles_url = list()
         art_meta_new = dict()
         art_meta_old = dict()
@@ -395,5 +387,5 @@ class PttCrawler(object):
             except Exception as e:
                 self.log.exception(e)
                 file_name = 'UnkownFileName_%d' % time.time()
-            self.save_article(board, file_name, art, art_meta_new, art_meta_old, json_today)
+            self.save_article(board, file_name, art, art_meta_new, art_meta_old, json_today, send)
             time.sleep(sleep_time)
