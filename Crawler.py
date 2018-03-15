@@ -5,6 +5,7 @@ import requests
 import time
 import json
 import os
+import configparser
 # import shutil # great than os.path
 
 # from LinkKafka import send_json_kafka
@@ -21,10 +22,6 @@ class Crawler(object):
     domain = 'http://www.appledaily.com.tw'
     root = domain + '/appledaily/archive/'
 
-    # File path. Will be removed in later version and using config file to instead of it.
-    file_root = '/data1/Dslab_News/'
-    log_root = file_root + 'log/'
-
     moon_trans = {'Jan': '01', 'Feb': '02', 'Mar': '03', 'Apr': '04',
                   'May': '05', 'Jun': '06', 'Jul': '07', 'Aug': '08',
                   'Sep': '09', 'Oct': '10', 'Nov': '11', 'Dec': '12'}
@@ -32,6 +29,12 @@ class Crawler(object):
     def __init__(self):
         self.session = requests.session()
         requests.packages.urllib3.disable_warnings()
+
+        self.config = configparser.ConfigParser()
+        self.config.read('Config.ini')
+        self.file_root = self.config.get('path_to_save_data', 'file_root')
+        self.log_root = self.config.get('path_to_save_data', 'log_root')
+
         self.log = logging.getLogger(self.carwler_name)
         self.set_log_conf()
 
