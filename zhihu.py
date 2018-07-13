@@ -2,6 +2,9 @@
 
 import requests
 import time
+import json
+
+import os.path
 
 from bs4 import BeautifulSoup
 
@@ -23,7 +26,12 @@ class ZhihuCrawler():
     def __init__(self):
         self.browser = webdriver.PhantomJS()
         # self.browser = webdriver.Chrome()
-        self.meta = {}
+        self.meta_path ='/data2/Dslab_News/Zhihu/zhihu_similar.json'
+        if os.path.isfile(self.meta_path):
+            with open(self.meta_path, 'r') as rf:
+                self.meta = json.load(rf)
+        else:
+            self.meta = {}
 
     def page(self):
         target_page = self.root
@@ -55,7 +63,9 @@ class ZhihuCrawler():
                 if title not in self.meta:
                     rlt_title.append(title)
                     rlt_url.append(href)
-                    self.meta[title] = href
+                    self.meta[title] = {'url': href,
+                                        'children': [],
+                                        'check': False}
         return rlt_title, rlt_url
 
     def parse_article(self, titles, urls):
@@ -77,14 +87,52 @@ class ZhihuCrawler():
                         similar_title = tag.text
                         similar_url = self.root + tag['href']
                         if similar_title not in self.meta:
+                            self.meta[titles[i]]['children'].append(similar_title)
                             print(similar_title)
                             print(similar_url)
                             rlt_title.append(similar_title)
                             rlt_url.append(similar_url)
-                            self.meta[similar_title] = similar_url
+                            self.meta[similar_title] = {'url': similar_url,
+                                                        'children': []}
             except Exception as e:
                 print(e)
+            with open(self.meta_path, 'w') as wf:
+                json.dump(self.meta, wf, ensure_ascii=False, indent=4)
             self.parse_article(rlt_title, rlt_url)
+
+    def parse(self):
+        ctrl = True
+        while ctrl:
+            check_list = [(t, v['url']) for t, v in self.meta.items() if not v['check']]
+            if len(check_list) == 0:
+                break
+            for title, url in check_list:
+                print('-\ntarget:{0}'.format(title))
+                print(url)
+                try:
+                    self.browser.get(url)
+                    time.sleep(0.78)
+                    source = self.browser.page_source
+                    soup = BeautifulSoup(source, 'lxml')
+
+                    found_tags = soup.select('.SimilarQuestions-item .Button--plain')
+                    if found_tags:
+                        for tag in found_tags:
+                            similar_title = tag.text
+                            similar_url = self.root + tag['href']
+                            if similar_title not in self.meta:
+                                self.meta[title]['children'].append(similar_title)
+                                print(similar_title)
+                                print(similar_url)
+                                self.meta[similar_title] = {'url': similar_url,
+                                                            'children': [],
+                                                            'check': False}
+                    self.meta[title]['check'] = True
+                except Exception as e:
+                    print(e)
+                with open(self.meta_path, 'w') as wf:
+                    json.dump(self.meta, wf, ensure_ascii=False, indent=4)
+
 
     def activate(self):
         # for topic, url in self.articles(self.page()):
@@ -92,7 +140,8 @@ class ZhihuCrawler():
         #     self.parse_article(topic, url)
         #     print('='*10)
         topic, url = self.articles(self.page())
-        self.parse_article(titles=topic, urls=url)
+        # self.parse_article(titles=topic, urls=url)
+        self.parse()
         self.browser.close()
 
 if __name__ == '__main__':
